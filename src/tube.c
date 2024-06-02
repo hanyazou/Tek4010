@@ -26,13 +26,32 @@
  
 #define DEBUG    0              // print debug info
 #define DEBUGMAX 0              // exit after DEBUGMAX chars, 0 means no exit
+#define BRIGHTER 1
 
 #define WRITE_TROUGH_INTENSITY  0.5             // green only
 #define NORMAL_INTENSITY        0.7             // green only
 #define CURSOR_INTENSITY        0.7             // green only
-#define BRIGHT_SPOT_INTENSITY   1.0			    // light green
-#define BLACK_INTENSITY         0.08            // effect of flood gun
+#if BRIGHTER
+#define BRIGHT_SPOT_INTENSITY   1.8             // mint green
+#else
+#define BRIGHT_SPOT_INTENSITY   1.0             // light green
+#endif
+//#define BLACK_INTENSITY         0.08            // effect of flood gun
+#define BLACK_INTENSITY         0.07            // effect of flood gun
+#define BLACK_INTENSITY_RB      0.03            // effect of flood gun
+#if BRIGHTER
+#define FADE                    0.5				// lower value means slower fading
+#else
 #define FADE                    0.3				// lower value means slower fading
+#endif
+
+#define WRITE_TROUGH_RGB        1
+#define NORMAL_RGB              2
+#define NORMAL_BLUR_RGB         3
+#define CURSOR_RGB              4
+#define BRIGHT_SPOT_RGB         5
+#define BRIGHT_BLUR_RGB         6
+#define BLACK_RGB               7
 
 #define _GNU_SOURCE
 
@@ -561,9 +580,33 @@ void tube_quit()
         system("pkill rs232-console");
 }
 
+void tube_set_source_rgb(cairo_t *c, int rgb)
+{
+        switch (rgb) {
+        case WRITE_TROUGH_RGB:
+        case NORMAL_RGB:
+        case CURSOR_RGB:
+            cairo_set_source_rgb(c, 0.37, 0.68, 0.41);
+            break;
+        case NORMAL_BLUR_RGB:
+            cairo_set_source_rgb(c, 0.23, 0.46, 0.23);
+            break;
+        case BRIGHT_SPOT_RGB:
+            cairo_set_source_rgb(c, 0.72, 0.96, 0.87);
+            break;
+        case BRIGHT_BLUR_RGB:
+            cairo_set_source_rgb(c, 0.20, 0.37, 0.28);
+            break;
+        case BLACK_RGB:
+            cairo_set_source_rgb(c, 0.03, 0.07, 0.03);
+            break;
+        }
+}
+
 void tube_doCursor(cairo_t *cr2)
 {
-        cairo_set_source_rgb(cr2, 0, CURSOR_INTENSITY, 0);
+        //cairo_set_source_rgb(cr2, 0, CURSOR_INTENSITY, 0);
+        tube_set_source_rgb(cr2, CURSOR_RGB);
         cairo_set_line_width (cr2, 1);
         cairo_rectangle(cr2, tube_x0, windowHeight - tube_y0 - vDotsPerChar + 6 + currentCharacterOffset,
                                                 hDotsPerChar - 3, vDotsPerChar - 3);
@@ -575,7 +618,8 @@ void tube_clearPersistent(cairo_t *cr, cairo_t *cr2)
 // clear the persistent surface
 // flash using the second surface
 {
-        cairo_set_source_rgb(cr, 0.0, BLACK_INTENSITY, 0.0);
+        //cairo_set_source_rgb(cr, 0.0, BLACK_INTENSITY, 0.0);
+        tube_set_source_rgb(cr, BLACK_RGB);
         cairo_paint(cr);
         tube_doClearPersistent = 0;
         tube_x0 = 0;
@@ -583,8 +627,12 @@ void tube_clearPersistent(cairo_t *cr, cairo_t *cr2)
         tube_x2 = tube_x0;
         tube_y2 = tube_y0;
         leftmargin = 0;
-        cairo_set_source_rgb(cr, 0, NORMAL_INTENSITY, 0);
-        cairo_set_source_rgb(cr2, 0, BRIGHT_SPOT_INTENSITY / 2, 0);
+        //cairo_set_source_rgb(cr, 0, NORMAL_INTENSITY, 0);
+        tube_set_source_rgb(cr, NORMAL_RGB);
+        cairo_set_line_cap(cr, CAIRO_LINE_CAP_ROUND);
+        //cairo_set_source_rgb(cr2, 0, BRIGHT_SPOT_INTENSITY / 2, 0);
+        tube_set_source_rgb(cr2, BRIGHT_SPOT_RGB);
+        cairo_set_line_cap(cr2, CAIRO_LINE_CAP_ROUND);
         cairo_paint(cr2);
         isBrightSpot = 1;
         plotPointMode = 0;
@@ -793,19 +841,38 @@ void tube_drawCharacter(cairo_t *cr, cairo_t *cr2, char ch)
         cairo_set_font_size(cr2,currentFontSize); 
 
         if (writeThroughMode) {  // draw the write-through character
-                cairo_set_source_rgb(cr2, 0, WRITE_TROUGH_INTENSITY, 0);
+                //cairo_set_source_rgb(cr2, 0, WRITE_TROUGH_INTENSITY, 0);
+                tube_set_source_rgb(cr2, WRITE_TROUGH_RGB);
                 cairo_move_to(cr2, tube_x0, windowHeight - tube_y0 + currentCharacterOffset);
                 cairo_show_text(cr2, s);
         }
                                                 
         else {
                 // draw the character
-                cairo_set_source_rgb(cr, 0, BLACK_INTENSITY + ((NORMAL_INTENSITY - BLACK_INTENSITY) * intensity) / 100, 0);
+                // cairo_set_source_rgb(cr, 0, BLACK_INTENSITY + ((NORMAL_INTENSITY - BLACK_INTENSITY) * intensity) / 100, 0);
+                tube_set_source_rgb(cr, NORMAL_RGB);
                 cairo_move_to(cr, tube_x0, windowHeight - tube_y0 + currentCharacterOffset);
                 cairo_show_text(cr, s);
                                                 
                 // draw the bright spot
-                cairo_set_source_rgb(cr2, BRIGHT_SPOT_INTENSITY/2, BRIGHT_SPOT_INTENSITY, BRIGHT_SPOT_INTENSITY/2);
+#if BRIGHTER
+                cairo_set_operator(cr2, CAIRO_OPERATOR_LIGHTEN);
+                tube_set_source_rgb(cr2, BRIGHT_BLUR_RGB);
+                cairo_move_to(cr2, tube_x0 - 8, windowHeight - tube_y0 + currentCharacterOffset - 8);
+                cairo_show_text(cr2, s);
+                cairo_move_to(cr2, tube_x0 + 1, windowHeight - tube_y0 + currentCharacterOffset + 1);
+                cairo_show_text(cr2, s);
+                cairo_move_to(cr2, tube_x0 + 1, windowHeight - tube_y0 + currentCharacterOffset - 1);
+                cairo_show_text(cr2, s);
+                cairo_move_to(cr2, tube_x0 - 1, windowHeight - tube_y0 + currentCharacterOffset - 1);
+                cairo_show_text(cr2, s);
+                cairo_move_to(cr2, tube_x0 - 1, windowHeight - tube_y0 + currentCharacterOffset + 1);
+                cairo_show_text(cr2, s);
+                cairo_set_operator(cr2, CAIRO_OPERATOR_OVER);
+#endif
+
+                //cairo_set_source_rgb(cr2, BRIGHT_SPOT_INTENSITY/2, BRIGHT_SPOT_INTENSITY, BRIGHT_SPOT_INTENSITY/2);
+                tube_set_source_rgb(cr2, BRIGHT_SPOT_RGB);
                 cairo_move_to(cr2, tube_x0, windowHeight - tube_y0 + currentCharacterOffset);
                 cairo_show_text(cr2, s);                        
         }
@@ -831,7 +898,8 @@ void tube_drawPoint(cairo_t *cr, cairo_t *cr2)
 #define PI2 6.283185307
         int i1;
         cairo_set_line_width (cr, pensize + defocussed);
-        cairo_set_source_rgb(cr, 0, BLACK_INTENSITY + ((1.0 - BLACK_INTENSITY) * intensity) / 100, 0);
+        //cairo_set_source_rgb(cr, 0, BLACK_INTENSITY + ((1.0 - BLACK_INTENSITY) * intensity) / 100, 0);
+        tube_set_source_rgb(cr, NORMAL_RGB);
         cairo_move_to(cr, tube_x2, windowHeight - tube_y2);
         cairo_line_to(cr, tube_x2 + 1, windowHeight - tube_y2 + 1);
         cairo_stroke (cr);
@@ -839,14 +907,35 @@ void tube_drawPoint(cairo_t *cr, cairo_t *cr2)
         // speed is a problem here
         // do not draw adjacent bright spots
                                         
+#if BRIGHTER
+        cairo_set_operator(cr2, CAIRO_OPERATOR_LIGHTEN);
+        cairo_set_line_cap(cr2, CAIRO_LINE_CAP_ROUND);
+        cairo_set_line_width (cr2, (pensize + 3) + defocussed);
+        tube_set_source_rgb(cr2, BRIGHT_BLUR_RGB);
+        cairo_move_to(cr2, tube_x2, windowHeight - tube_y2);
+        cairo_line_to(cr2, tube_x2 + 1, windowHeight - tube_y2 + 1);
+
+        cairo_set_line_width (cr2, (pensize + 1) + defocussed);
+        cairo_move_to(cr2, tube_x2 - 8, windowHeight - tube_y2 - 8);
+        cairo_line_to(cr2, tube_x2 - 8 + 1, windowHeight - tube_y2 + 1 - 8);
+        cairo_stroke (cr2);
+
+        tube_set_source_rgb(cr2, BRIGHT_SPOT_RGB);
+        cairo_move_to(cr2, tube_x2, windowHeight - tube_y2);
+        cairo_line_to(cr2, tube_x2 + 1, windowHeight - tube_y2 + 1);
+        cairo_stroke (cr2);
+
+        cairo_set_operator(cr2, CAIRO_OPERATOR_OVER);
+#endif
         if (((tube_x2 - xlast) > 2) || ((xlast - tube_x2) > 2) ||
-                ((tube_y2 - ylast) > 2) || ((ylast - tube_y2) > 2))  {
+                ((tube_y2 - ylast) > 2) || ((ylast - tube_y2) > 2)) {
                                         
                 // draw the bright spot
                 cairo_set_line_width (cr2, 0.1);
-                double bsc = (BRIGHT_SPOT_INTENSITY * intensity) / 100;
+                //double bsc = (BRIGHT_SPOT_INTENSITY * intensity) / 100;
                               
-                cairo_set_source_rgb(cr2, bsc/2, bsc, bsc/2);                        
+                //cairo_set_source_rgb(cr2, bsc/2, bsc, bsc/2);                        
+                tube_set_source_rgb(cr2, BRIGHT_SPOT_RGB);
                 cairo_arc(cr2, tube_x2, windowHeight - tube_y2, 2 + defocussed, 0, PI2);
                 cairo_fill(cr2);
                                                 
@@ -861,7 +950,8 @@ void tube_crosshair(cairo_t *cr, cairo_t *cr2)
 {
         // printf("crosshair at %d,%d\n", tube_x0, tube_y0);
         cairo_set_line_width (cr2, 1);
-        cairo_set_source_rgb(cr2, 0.0, WRITE_TROUGH_INTENSITY, 0.0);
+        //cairo_set_source_rgb(cr2, 0.0, WRITE_TROUGH_INTENSITY, 0.0);
+        tube_set_source_rgb(cr2, WRITE_TROUGH_RGB);
         cairo_move_to(cr2, tube_x0, 0);
         cairo_line_to(cr2, tube_x0, windowHeight);
         cairo_move_to(cr2, 0, windowHeight - tube_y0);
@@ -882,7 +972,8 @@ void tube_drawVector(cairo_t *cr, cairo_t *cr2)
 
         if (writeThroughMode) {
                 cairo_set_line_width (cr2, pensize + 1);
-                cairo_set_source_rgb(cr2, 0.0, WRITE_TROUGH_INTENSITY, 0.0);
+                //cairo_set_source_rgb(cr2, 0.0, WRITE_TROUGH_INTENSITY, 0.0);
+                tube_set_source_rgb(cr2, WRITE_TROUGH_RGB);
                 cairo_move_to(cr2, tube_x0, windowHeight - tube_y0);
                 cairo_line_to(cr2, tube_x2, windowHeight - tube_y2);
                 cairo_stroke (cr2);
@@ -890,20 +981,64 @@ void tube_drawVector(cairo_t *cr, cairo_t *cr2)
         
         else {
                 // draw the actual vector on permanent surface
+                cairo_set_operator(cr, CAIRO_OPERATOR_LIGHTEN);
                 cairo_set_line_width (cr, pensize + defocussed);
-                cairo_set_source_rgb(cr, 0, BLACK_INTENSITY + ((NORMAL_INTENSITY - BLACK_INTENSITY) * intensity) / 100, 0);
+                tube_set_source_rgb(cr, NORMAL_BLUR_RGB);
                 tube_line_type(cr, cr2, ltype);
                 cairo_move_to(cr, tube_x0, windowHeight - tube_y0);
                 cairo_line_to(cr, tube_x2, windowHeight - tube_y2);
                 cairo_stroke (cr);
+
+                cairo_set_line_width (cr, pensize);
+                //cairo_set_source_rgb(cr, 0, BLACK_INTENSITY + ((NORMAL_INTENSITY - BLACK_INTENSITY) * intensity) / 100, 0);
+                tube_set_source_rgb(cr, NORMAL_RGB);
+                tube_line_type(cr, cr2, ltype);
+                cairo_move_to(cr, tube_x0, windowHeight - tube_y0);
+                cairo_line_to(cr, tube_x2, windowHeight - tube_y2);
+                cairo_stroke (cr);
+                cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
         
                                         
                 // draw the bright spot
-                cairo_set_line_width (cr, (pensize+1) + defocussed);
-                cairo_set_source_rgb(cr2, BRIGHT_SPOT_INTENSITY/2, BRIGHT_SPOT_INTENSITY, BRIGHT_SPOT_INTENSITY/2);                       
+#if BRIGHTER
+                cairo_set_operator(cr2, CAIRO_OPERATOR_LIGHTEN);
+                cairo_set_line_cap(cr2, CAIRO_LINE_CAP_ROUND);
+                cairo_set_line_width(cr2, (pensize+5) + defocussed);
+                tube_set_source_rgb(cr2, BRIGHT_BLUR_RGB);
                 cairo_move_to(cr2, tube_x0, windowHeight - tube_y0);
                 cairo_line_to(cr2, tube_x2, windowHeight - tube_y2);
                 cairo_stroke(cr2);
+
+                cairo_set_line_width(cr2, (pensize+1.5) + defocussed);
+                tube_set_source_rgb(cr2, BRIGHT_SPOT_RGB);
+                cairo_move_to(cr2, tube_x0, windowHeight - tube_y0);
+                cairo_line_to(cr2, tube_x0 + 1, windowHeight - tube_y0);
+                cairo_move_to(cr2, tube_x2, windowHeight - tube_y2);
+                cairo_line_to(cr2, tube_x2 + 1, windowHeight - tube_y2);
+                cairo_stroke(cr2);
+
+                cairo_set_line_width(cr2, (pensize+1) + defocussed);
+                tube_set_source_rgb(cr2, BRIGHT_BLUR_RGB);
+                cairo_move_to(cr2, tube_x0 - 8, windowHeight - tube_y0 - 8);
+                cairo_line_to(cr2, tube_x2 - 8, windowHeight - tube_y2 - 8);
+                cairo_stroke(cr2);
+
+                cairo_set_line_width(cr2, (pensize+1.5) + defocussed);
+                cairo_move_to(cr2, tube_x0 - 8, windowHeight - tube_y0 - 8);
+                cairo_line_to(cr2, tube_x0 - 8 + 1, windowHeight - tube_y0 - 8);
+                cairo_move_to(cr2, tube_x2 - 8, windowHeight - tube_y2 - 8);
+                cairo_line_to(cr2, tube_x2 - 8 + 1, windowHeight - tube_y2 - 8);
+                cairo_stroke(cr2);
+#endif
+
+                cairo_set_line_width(cr2, (pensize+1) + defocussed);
+                tube_set_source_rgb(cr2, BRIGHT_SPOT_RGB);
+                cairo_move_to(cr2, tube_x0, windowHeight - tube_y0);
+                cairo_line_to(cr2, tube_x2, windowHeight - tube_y2);
+                cairo_stroke(cr2);
+#if BRIGHTER
+                cairo_set_operator(cr2, CAIRO_OPERATOR_OVER);
+#endif
         }
 
         isBrightSpot = 1; // also to be set if writeThroughMode
@@ -913,7 +1048,8 @@ void tube_setupPainting(cairo_t *cr, cairo_t *cr2, char *fontName)
 {
         cairo_set_antialias(cr, CAIRO_ANTIALIAS_BEST);      
 	cairo_set_line_width (cr, pensize);
-        cairo_set_source_rgb(cr, 0, NORMAL_INTENSITY, 0);        
+        //cairo_set_source_rgb(cr, 0, NORMAL_INTENSITY, 0);        
+        tube_set_source_rgb(cr, NORMAL_RGB);
         cairo_select_font_face(cr, fontName, CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
         cairo_select_font_face(cr2, fontName, CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);        
 }
