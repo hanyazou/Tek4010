@@ -30,7 +30,7 @@
 #define WRITE_TROUGH_INTENSITY  0.5             // green only
 #define NORMAL_INTENSITY        0.7             // green only
 #define CURSOR_INTENSITY        0.7             // green only
-#define BRIGHT_SPOT_INTENSITY   1.0             // light green
+#define BRIGHT_SPOT_INTENSITY   1.5             // mint green
 #define BLACK_INTENSITY         0.08            // effect of flood gun
 #define FADE                    0.3             // lower value means slower fading
 
@@ -945,5 +945,5 @@ void tube_changeCharacterSize(cairo_t *cr, cairo_t *cr2,int charsPerLine, int ch
 
 void tube_set_source_intensity(cairo_t *cr, double intensity)
 {
-        cairo_set_source_rgb(cr, intensity/2, intensity, intensity/2);
+        cairo_set_source_rgb(cr, intensity/3, intensity, intensity/3);
 }
