@@ -30,7 +30,7 @@
 #define WRITE_TROUGH_INTENSITY  0.5             // green only
 #define NORMAL_INTENSITY        0.7             // green only
 #define CURSOR_INTENSITY        0.7             // green only
-#define BRIGHT_SPOT_INTENSITY   1.0             // light green
+#define BRIGHT_SPOT_INTENSITY   1.5             // mint green
 #define BLACK_INTENSITY         0.08            // effect of flood gun
 #define FADE                    0.3             // lower value means slower fading
 
