@@ -833,7 +833,7 @@ void tube_drawPoint(cairo_t *cr, cairo_t *cr2)
 #define PI2 6.283185307
         int i1;
         cairo_set_line_width (cr, pensize + defocussed);
-        tube_set_source_intensity(cr, BLACK_INTENSITY + ((1.0 - BLACK_INTENSITY) * intensity) / 100);
+        tube_set_source_intensity(cr, BLACK_INTENSITY + ((NORMAL_INTENSITY - BLACK_INTENSITY) * intensity) / 100);
         cairo_move_to(cr, tube_x2, windowHeight - tube_y2);
         cairo_line_to(cr, tube_x2 + 1, windowHeight - tube_y2 + 1);
         cairo_stroke (cr);
