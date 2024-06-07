@@ -59,5 +59,6 @@ extern void tube_crosshair(cairo_t *cr, cairo_t *cr2);
 extern void tube_drawVector(cairo_t *cr, cairo_t *cr2);
 extern void tube_drawCharacter(cairo_t *cr, cairo_t *cr2, char ch);
 extern void tube_drawPoint(cairo_t *cr, cairo_t *cr2);
+extern void tube_drawBrightSpots(cairo_t *cr, cairo_t *cr2);
 extern void tube_setupPainting(cairo_t *cr, cairo_t *cr2, char *fontName);
 extern void tube_changeCharacterSize(cairo_t *cr, cairo_t *cr2, int charsPerLine, int charsPerPage, double fontSize);

@@ -135,6 +135,13 @@ int getDataPipe[2];
 FILE *putKeys;
 int putKeysPipe[2];
 
+static void tube_addBrightCharacter(double intensity, double pensize, double x, double y,
+                                    const char *utf8);
+static void tube_addBrightPoint(double intensity, double pensize, double x, double y);
+static void tube_addBrightVector(double intensity, double pensize, double x0, double y0,
+                                 double x2, double y2);
+static void tube_set_source_intensity(cairo_t *cr, double intensity);
+
 long tube_mSeconds()
 // return time in msec since start of program
 {
@@ -147,6 +154,20 @@ long tube_mSeconds()
         initialized = 1;
         t = t - startTime;
         if (t < 0) t += 86400000;
+        return t;
+}
+
+uint64_t tube_uSeconds()
+// return time in micro sec since start of program
+{
+        static int initialized = 0;
+        static uint64_t startTime;
+        struct timeval tv;
+        gettimeofday(&tv,NULL);
+        uint64_t t = ((uint64_t)1000000 * tv.tv_sec)  + tv.tv_usec;
+        if (!initialized) startTime = t;
+        initialized = 1;
+        t = t - startTime;
         return t;
 }
 
@@ -563,7 +584,7 @@ void tube_quit()
 
 void tube_doCursor(cairo_t *cr2)
 {
-        cairo_set_source_rgb(cr2, 0, CURSOR_INTENSITY, 0);
+        tube_set_source_intensity(cr2, CURSOR_INTENSITY);
         cairo_set_line_width (cr2, 1);
         cairo_rectangle(cr2, tube_x0, windowHeight - tube_y0 - vDotsPerChar + 6 + currentCharacterOffset,
                                                 hDotsPerChar - 3, vDotsPerChar - 3);
@@ -575,7 +596,7 @@ void tube_clearPersistent(cairo_t *cr, cairo_t *cr2)
 // clear the persistent surface
 // flash using the second surface
 {
-        cairo_set_source_rgb(cr, 0.0, BLACK_INTENSITY, 0.0);
+        tube_set_source_intensity(cr, BLACK_INTENSITY);
         cairo_paint(cr);
         tube_doClearPersistent = 0;
         tube_x0 = 0;
@@ -583,8 +604,8 @@ void tube_clearPersistent(cairo_t *cr, cairo_t *cr2)
         tube_x2 = tube_x0;
         tube_y2 = tube_y0;
         leftmargin = 0;
-        cairo_set_source_rgb(cr, 0, NORMAL_INTENSITY, 0);
-        cairo_set_source_rgb(cr2, 0, BRIGHT_SPOT_INTENSITY / 2, 0);
+        tube_set_source_intensity(cr, NORMAL_INTENSITY);
+        tube_set_source_intensity(cr2, BRIGHT_SPOT_INTENSITY / 2);
         cairo_paint(cr2);
         isBrightSpot = 1;
         plotPointMode = 0;
@@ -599,19 +620,10 @@ void tube_clearPersistent(cairo_t *cr, cairo_t *cr2)
 void tube_clearSecond(cairo_t *cr2)
 // clear second surface
 {
-        if (argFast) {
-                cairo_set_source_rgba(cr2, 0, 0, 0, 0);
-                cairo_set_operator(cr2, CAIRO_OPERATOR_SOURCE);
-                cairo_paint(cr2);
-                cairo_set_operator(cr2, CAIRO_OPERATOR_OVER);
-        }
-        else {
-                cairo_set_source_rgba(cr2, 0, 0, 0, FADE);
-                cairo_set_operator(cr2, CAIRO_OPERATOR_MULTIPLY);
-                cairo_paint(cr2);
-                cairo_set_operator(cr2, CAIRO_OPERATOR_OVER);
-                isBrightSpot = 1;
-        }
+        cairo_set_source_rgb(cr2, 0, 0, 0);
+        cairo_set_operator(cr2, CAIRO_OPERATOR_SOURCE);
+        cairo_paint(cr2);
+        cairo_set_operator(cr2, CAIRO_OPERATOR_OVER);
 }
 
 void tube_line_type(cairo_t *cr, cairo_t *cr2, enum LineType ln)
@@ -793,21 +805,20 @@ void tube_drawCharacter(cairo_t *cr, cairo_t *cr2, char ch)
         cairo_set_font_size(cr2,currentFontSize);
 
         if (writeThroughMode) {  // draw the write-through character
-                cairo_set_source_rgb(cr2, 0, WRITE_TROUGH_INTENSITY, 0);
+                tube_set_source_intensity(cr2, WRITE_TROUGH_INTENSITY);
                 cairo_move_to(cr2, tube_x0, windowHeight - tube_y0 + currentCharacterOffset);
                 cairo_show_text(cr2, s);
         }
 
         else {
                 // draw the character
-                cairo_set_source_rgb(cr, 0, BLACK_INTENSITY + ((NORMAL_INTENSITY - BLACK_INTENSITY) * intensity) / 100, 0);
+                tube_set_source_intensity(cr, BLACK_INTENSITY + ((NORMAL_INTENSITY - BLACK_INTENSITY) * intensity) / 100);
                 cairo_move_to(cr, tube_x0, windowHeight - tube_y0 + currentCharacterOffset);
                 cairo_show_text(cr, s);
 
-                // draw the bright spot
-                cairo_set_source_rgb(cr2, BRIGHT_SPOT_INTENSITY/2, BRIGHT_SPOT_INTENSITY, BRIGHT_SPOT_INTENSITY/2);
-                cairo_move_to(cr2, tube_x0, windowHeight - tube_y0 + currentCharacterOffset);
-                cairo_show_text(cr2, s);
+                // draw the bright spo
+                tube_addBrightCharacter(BRIGHT_SPOT_INTENSITY, pensize, tube_x0,
+                                        windowHeight - tube_y0 + currentCharacterOffset, s);
         }
 
         tube_x0 += hDotsPerChar;
@@ -831,28 +842,14 @@ void tube_drawPoint(cairo_t *cr, cairo_t *cr2)
 #define PI2 6.283185307
         int i1;
         cairo_set_line_width (cr, pensize + defocussed);
-        cairo_set_source_rgb(cr, 0, BLACK_INTENSITY + ((1.0 - BLACK_INTENSITY) * intensity) / 100, 0);
+        tube_set_source_intensity(cr, BLACK_INTENSITY + ((1.0 - BLACK_INTENSITY) * intensity) / 100);
         cairo_move_to(cr, tube_x2, windowHeight - tube_y2);
         cairo_line_to(cr, tube_x2 + 1, windowHeight - tube_y2 + 1);
         cairo_stroke (cr);
 
-        // speed is a problem here
-        // do not draw adjacent bright spots
-
-        if (((tube_x2 - xlast) > 2) || ((xlast - tube_x2) > 2) ||
-                ((tube_y2 - ylast) > 2) || ((ylast - tube_y2) > 2))  {
-
-                // draw the bright spot
-                cairo_set_line_width (cr2, 0.1);
-                double bsc = (BRIGHT_SPOT_INTENSITY * intensity) / 100;
-
-                cairo_set_source_rgb(cr2, bsc/2, bsc, bsc/2);
-                cairo_arc(cr2, tube_x2, windowHeight - tube_y2, 2 + defocussed, 0, PI2);
-                cairo_fill(cr2);
-
-                xlast = tube_x2;
-                ylast = tube_y2;
-        }
+        // draw the bright spot
+        tube_addBrightPoint((BRIGHT_SPOT_INTENSITY * intensity) / 100, pensize, tube_x2,
+                            windowHeight - tube_y2);
 
         isBrightSpot = 1;
 }
@@ -861,7 +858,7 @@ void tube_crosshair(cairo_t *cr, cairo_t *cr2)
 {
         // printf("crosshair at %d,%d\n", tube_x0, tube_y0);
         cairo_set_line_width (cr2, 1);
-        cairo_set_source_rgb(cr2, 0.0, WRITE_TROUGH_INTENSITY, 0.0);
+        tube_set_source_intensity(cr2, WRITE_TROUGH_INTENSITY);
         cairo_move_to(cr2, tube_x0, 0);
         cairo_line_to(cr2, tube_x0, windowHeight);
         cairo_move_to(cr2, 0, windowHeight - tube_y0);
@@ -882,7 +879,7 @@ void tube_drawVector(cairo_t *cr, cairo_t *cr2)
 
         if (writeThroughMode) {
                 cairo_set_line_width (cr2, pensize + 1);
-                cairo_set_source_rgb(cr2, 0.0, WRITE_TROUGH_INTENSITY, 0.0);
+                tube_set_source_intensity(cr2, WRITE_TROUGH_INTENSITY);
                 cairo_move_to(cr2, tube_x0, windowHeight - tube_y0);
                 cairo_line_to(cr2, tube_x2, windowHeight - tube_y2);
                 cairo_stroke (cr2);
@@ -891,7 +888,7 @@ void tube_drawVector(cairo_t *cr, cairo_t *cr2)
         else {
                 // draw the actual vector on permanent surface
                 cairo_set_line_width (cr, pensize + defocussed);
-                cairo_set_source_rgb(cr, 0, BLACK_INTENSITY + ((NORMAL_INTENSITY - BLACK_INTENSITY) * intensity) / 100, 0);
+                tube_set_source_intensity(cr, BLACK_INTENSITY + ((NORMAL_INTENSITY - BLACK_INTENSITY) * intensity) / 100);
                 tube_line_type(cr, cr2, ltype);
                 cairo_move_to(cr, tube_x0, windowHeight - tube_y0);
                 cairo_line_to(cr, tube_x2, windowHeight - tube_y2);
@@ -899,11 +896,9 @@ void tube_drawVector(cairo_t *cr, cairo_t *cr2)
 
 
                 // draw the bright spot
-                cairo_set_line_width (cr, (pensize+1) + defocussed);
-                cairo_set_source_rgb(cr2, BRIGHT_SPOT_INTENSITY/2, BRIGHT_SPOT_INTENSITY, BRIGHT_SPOT_INTENSITY/2);
-                cairo_move_to(cr2, tube_x0, windowHeight - tube_y0);
-                cairo_line_to(cr2, tube_x2, windowHeight - tube_y2);
-                cairo_stroke(cr2);
+                tube_addBrightVector(BRIGHT_SPOT_INTENSITY, pensize,
+                                     tube_x0, windowHeight - tube_y0,
+                                     tube_x2, windowHeight - tube_y2);
         }
 
         isBrightSpot = 1; // also to be set if writeThroughMode
@@ -913,7 +908,7 @@ void tube_setupPainting(cairo_t *cr, cairo_t *cr2, char *fontName)
 {
         cairo_set_antialias(cr, CAIRO_ANTIALIAS_BEST);
         cairo_set_line_width (cr, pensize);
-        cairo_set_source_rgb(cr, 0, NORMAL_INTENSITY, 0);
+        tube_set_source_intensity(cr, NORMAL_INTENSITY);
         cairo_select_font_face(cr, fontName, CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
         cairo_select_font_face(cr2, fontName, CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);
 }
@@ -939,4 +934,117 @@ void tube_changeCharacterSize(cairo_t *cr, cairo_t *cr2,int charsPerLine, int ch
         }
         else
                 currentCharacterOffset = 0;
+}
+
+void tube_set_source_intensity(cairo_t *cr, double intensity)
+{
+        cairo_set_source_rgb(cr, intensity/3, intensity, intensity/3);
+}
+
+#define MAX_NUM_OF_BRIGHT_SPOTS 1000
+#define MAX_CHARACTER_LENGTH 4
+
+enum {
+    BRIGHT_SPOT_CHARACTER,
+    BRIGHT_SPOT_POINT,
+    BRIGHT_SPOT_VECTOR,
+};
+
+struct brightSpot {
+        uint64_t time_stamp_usec;
+        int type;
+        double intensity;
+        double pensize;
+        double x0, y0, x2, y2;
+        char s[MAX_CHARACTER_LENGTH + 1];
+};
+
+static struct brightSpot brightSpots[MAX_NUM_OF_BRIGHT_SPOTS];
+static int num_of_bright_spots = 0;
+
+void tube_addBrightCharacter(double intensity, double pensize, double x, double y, const char *utf8)
+{
+        if (MAX_NUM_OF_BRIGHT_SPOTS <= num_of_bright_spots) {
+                return;
+        }
+        struct brightSpot *bs = &brightSpots[num_of_bright_spots++];
+        bs->time_stamp_usec = tube_uSeconds();
+        bs->type = BRIGHT_SPOT_CHARACTER;
+        bs->intensity = intensity;
+        bs->pensize = pensize;
+        bs->x0 = x;
+        bs->y0 = y;
+        strncpy(bs->s, utf8, sizeof(bs->s));
+        bs->s[sizeof(bs->s) - 1] = '\0';
+}
+
+void tube_addBrightPoint(double intensity, double pensize, double x, double y)
+{
+        if (MAX_NUM_OF_BRIGHT_SPOTS <= num_of_bright_spots) {
+                return;
+        }
+        struct brightSpot *bs = &brightSpots[num_of_bright_spots++];
+        bs->time_stamp_usec = tube_uSeconds();
+        bs->type = BRIGHT_SPOT_POINT;
+        bs->intensity = intensity;
+        bs->pensize = pensize;
+        bs->x0 = x;
+        bs->y0 = y;
+}
+
+void tube_addBrightVector(double intensity, double pensize, double x0, double y0, double x2, double y2)
+{
+        if (MAX_NUM_OF_BRIGHT_SPOTS <= num_of_bright_spots) {
+                return;
+        }
+        struct brightSpot *bs = &brightSpots[num_of_bright_spots++];
+        bs->time_stamp_usec = tube_uSeconds();
+        bs->type = BRIGHT_SPOT_VECTOR;
+        bs->intensity = intensity;
+        bs->pensize = pensize;
+        bs->x0 = x0;
+        bs->y0 = y0;
+        bs->x2 = x2;
+        bs->y2 = y2;
+}
+
+void tube_drawBrightSpots(cairo_t *cr, cairo_t *cr2)
+{
+        cairo_set_operator(cr2, CAIRO_OPERATOR_LIGHTEN);
+
+        int i;
+        uint64_t now = tube_uSeconds();
+        uint64_t fadeout = 50 * 1000;  // 50 milli seconds
+        for (i = 0; i < num_of_bright_spots; i++) {
+                struct brightSpot *bs = &brightSpots[i];
+
+                uint64_t age = now - bs->time_stamp_usec;
+
+                if (fadeout <= age)
+                    break;
+
+                double intensity = bs->intensity * (fadeout - age) / fadeout;
+                tube_set_source_intensity(cr2, intensity);
+
+                switch (bs->type) {
+                case BRIGHT_SPOT_CHARACTER:
+                        cairo_move_to(cr2, bs->x0, bs->y0);
+                        cairo_show_text(cr2, bs->s);
+                        break;
+                case BRIGHT_SPOT_POINT:
+                        cairo_set_line_width (cr2, 0.1);
+                        cairo_arc(cr2, bs->x0, bs->y0, bs->pensize + 1 + defocussed, 0, PI2);
+                        cairo_fill(cr2);
+                        break;
+                case BRIGHT_SPOT_VECTOR:
+                        cairo_set_line_width(cr2, (bs->pensize+1) + defocussed);
+                        cairo_move_to(cr2, bs->x0, bs->y0);
+                        cairo_line_to(cr2, bs->x2, bs->y2);
+                        cairo_stroke(cr2);
+                        break;
+                }
+        }
+        num_of_bright_spots = 0;
+
+        cairo_set_operator(cr2, CAIRO_OPERATOR_OVER);
 }
