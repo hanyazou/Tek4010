@@ -30,7 +30,7 @@
 #define WRITE_TROUGH_INTENSITY  0.5             // green only
 #define NORMAL_INTENSITY        0.7             // green only
 #define CURSOR_INTENSITY        0.7             // green only
-#define BRIGHT_SPOT_INTENSITY   1.0             // light green
+#define BRIGHT_SPOT_INTENSITY   1.5             // mint green
 #define BLACK_INTENSITY         0.08            // effect of flood gun
 #define FADE                    0.3             // lower value means slower fading
 
@@ -134,6 +134,11 @@ int getDataPipe[2];
 
 FILE *putKeys;
 int putKeysPipe[2];
+
+static void tube_set_source_intensity(cairo_t *cr, double intensity)
+{
+        cairo_set_source_rgb(cr, intensity/3, intensity, intensity/3);
+}
 
 long tube_mSeconds()
 // return time in msec since start of program
@@ -563,7 +568,7 @@ void tube_quit()
 
 void tube_doCursor(cairo_t *cr2)
 {
-        cairo_set_source_rgb(cr2, 0, CURSOR_INTENSITY, 0);
+        tube_set_source_intensity(cr2, CURSOR_INTENSITY);
         cairo_set_line_width (cr2, 1);
         cairo_rectangle(cr2, tube_x0, windowHeight - tube_y0 - vDotsPerChar + 6 + currentCharacterOffset,
                                                 hDotsPerChar - 3, vDotsPerChar - 3);
@@ -575,7 +580,7 @@ void tube_clearPersistent(cairo_t *cr, cairo_t *cr2)
 // clear the persistent surface
 // flash using the second surface
 {
-        cairo_set_source_rgb(cr, 0.0, BLACK_INTENSITY, 0.0);
+        tube_set_source_intensity(cr, BLACK_INTENSITY);
         cairo_paint(cr);
         tube_doClearPersistent = 0;
         tube_x0 = 0;
@@ -583,8 +588,8 @@ void tube_clearPersistent(cairo_t *cr, cairo_t *cr2)
         tube_x2 = tube_x0;
         tube_y2 = tube_y0;
         leftmargin = 0;
-        cairo_set_source_rgb(cr, 0, NORMAL_INTENSITY, 0);
-        cairo_set_source_rgb(cr2, 0, BRIGHT_SPOT_INTENSITY / 2, 0);
+        tube_set_source_intensity(cr, NORMAL_INTENSITY);
+        tube_set_source_intensity(cr2, BRIGHT_SPOT_INTENSITY / 2);
         cairo_paint(cr2);
         isBrightSpot = 1;
         plotPointMode = 0;
@@ -793,14 +798,14 @@ void tube_drawCharacter(cairo_t *cr, cairo_t *cr2, char ch)
         cairo_set_font_size(cr2,currentFontSize);
 
         if (writeThroughMode) {  // draw the write-through character
-                cairo_set_source_rgb(cr2, 0, WRITE_TROUGH_INTENSITY, 0);
+                tube_set_source_intensity(cr2, WRITE_TROUGH_INTENSITY);
                 cairo_move_to(cr2, tube_x0, windowHeight - tube_y0 + currentCharacterOffset);
                 cairo_show_text(cr2, s);
         }
 
         else {
                 // draw the character
-                cairo_set_source_rgb(cr, 0, BLACK_INTENSITY + ((NORMAL_INTENSITY - BLACK_INTENSITY) * intensity) / 100, 0);
+                tube_set_source_intensity(cr, BLACK_INTENSITY + ((NORMAL_INTENSITY - BLACK_INTENSITY) * intensity) / 100);
                 cairo_move_to(cr, tube_x0, windowHeight - tube_y0 + currentCharacterOffset);
                 cairo_show_text(cr, s);
 
@@ -831,7 +836,7 @@ void tube_drawPoint(cairo_t *cr, cairo_t *cr2)
 #define PI2 6.283185307
         int i1;
         cairo_set_line_width (cr, pensize + defocussed);
-        cairo_set_source_rgb(cr, 0, BLACK_INTENSITY + ((1.0 - BLACK_INTENSITY) * intensity) / 100, 0);
+        tube_set_source_intensity(cr, BLACK_INTENSITY + ((NORMAL_INTENSITY - BLACK_INTENSITY) * intensity) / 100);
         cairo_move_to(cr, tube_x2, windowHeight - tube_y2);
         cairo_line_to(cr, tube_x2 + 1, windowHeight - tube_y2 + 1);
         cairo_stroke (cr);
@@ -846,7 +851,7 @@ void tube_drawPoint(cairo_t *cr, cairo_t *cr2)
                 cairo_set_line_width (cr2, 0.1);
                 double bsc = (BRIGHT_SPOT_INTENSITY * intensity) / 100;
 
-                cairo_set_source_rgb(cr2, bsc/2, bsc, bsc/2);
+                tube_set_source_intensity(cr2, bsc);
                 cairo_arc(cr2, tube_x2, windowHeight - tube_y2, 2 + defocussed, 0, PI2);
                 cairo_fill(cr2);
 
@@ -861,7 +866,7 @@ void tube_crosshair(cairo_t *cr, cairo_t *cr2)
 {
         // printf("crosshair at %d,%d\n", tube_x0, tube_y0);
         cairo_set_line_width (cr2, 1);
-        cairo_set_source_rgb(cr2, 0.0, WRITE_TROUGH_INTENSITY, 0.0);
+        tube_set_source_intensity(cr2, WRITE_TROUGH_INTENSITY);
         cairo_move_to(cr2, tube_x0, 0);
         cairo_line_to(cr2, tube_x0, windowHeight);
         cairo_move_to(cr2, 0, windowHeight - tube_y0);
@@ -882,7 +887,7 @@ void tube_drawVector(cairo_t *cr, cairo_t *cr2)
 
         if (writeThroughMode) {
                 cairo_set_line_width (cr2, pensize + 1);
-                cairo_set_source_rgb(cr2, 0.0, WRITE_TROUGH_INTENSITY, 0.0);
+                tube_set_source_intensity(cr2, WRITE_TROUGH_INTENSITY);
                 cairo_move_to(cr2, tube_x0, windowHeight - tube_y0);
                 cairo_line_to(cr2, tube_x2, windowHeight - tube_y2);
                 cairo_stroke (cr2);
@@ -891,7 +896,7 @@ void tube_drawVector(cairo_t *cr, cairo_t *cr2)
         else {
                 // draw the actual vector on permanent surface
                 cairo_set_line_width (cr, pensize + defocussed);
-                cairo_set_source_rgb(cr, 0, BLACK_INTENSITY + ((NORMAL_INTENSITY - BLACK_INTENSITY) * intensity) / 100, 0);
+                tube_set_source_intensity(cr, BLACK_INTENSITY + ((NORMAL_INTENSITY - BLACK_INTENSITY) * intensity) / 100);
                 tube_line_type(cr, cr2, ltype);
                 cairo_move_to(cr, tube_x0, windowHeight - tube_y0);
                 cairo_line_to(cr, tube_x2, windowHeight - tube_y2);
@@ -899,7 +904,7 @@ void tube_drawVector(cairo_t *cr, cairo_t *cr2)
 
 
                 // draw the bright spot
-                cairo_set_line_width (cr, (pensize+1) + defocussed);
+                cairo_set_line_width (cr2, (pensize+1) + defocussed);
                 cairo_set_source_rgb(cr2, BRIGHT_SPOT_INTENSITY/2, BRIGHT_SPOT_INTENSITY, BRIGHT_SPOT_INTENSITY/2);
                 cairo_move_to(cr2, tube_x0, windowHeight - tube_y0);
                 cairo_line_to(cr2, tube_x2, windowHeight - tube_y2);
@@ -913,7 +918,7 @@ void tube_setupPainting(cairo_t *cr, cairo_t *cr2, char *fontName)
 {
         cairo_set_antialias(cr, CAIRO_ANTIALIAS_BEST);
         cairo_set_line_width (cr, pensize);
-        cairo_set_source_rgb(cr, 0, NORMAL_INTENSITY, 0);
+        tube_set_source_intensity(cr, NORMAL_INTENSITY);
         cairo_select_font_face(cr, fontName, CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
         cairo_select_font_face(cr2, fontName, CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);
 }
