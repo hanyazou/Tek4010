@@ -62,6 +62,7 @@
 #ifndef FIONREAD
 #include <sys/socket.h>
 #endif
+#include <float.h>
 
 #include "main.h"
 #include "tube.h"
@@ -1126,6 +1127,8 @@ void tube_addBrightCharacter(cairo_t *cr2, double intensity, double pensize, dou
         bs->fontsize = fontsize;
         bs->x0 = x;
         bs->y0 = y;
+        bs->x2 = x + fontsize;
+        bs->y2 = y + fontsize;
         strncpy(bs->s, utf8, sizeof(bs->s));
         bs->s[sizeof(bs->s) - 1] = '\0';
         if (argFast)
@@ -1141,6 +1144,8 @@ void tube_addBrightPoint(cairo_t *cr2, double intensity, double pensize, double 
         bs->pensize = pensize;
         bs->x0 = x;
         bs->y0 = y;
+        bs->x2 = x + pensize * 2;
+        bs->y2 = y + pensize * 2;
         if (argFast) {
                 tube_drawBrightSpot(cr2, bs, 2.0, GLOW_GAIN);
         } else {
@@ -1176,6 +1181,12 @@ void tube_drawGlowEffect(cairo_t *cr2)
         int i;
         uint64_t now = tube_uSeconds();
         uint64_t fadeout = 100 * 1000;  // 100 milli seconds
+
+        int n = 0;
+        double bbx0 = DBL_MAX;
+        double bby0 = DBL_MAX;
+        double bbx2 = DBL_MIN;
+        double bby2 = DBL_MIN;
         for (i = num_bs - 1; 0 <= i; i--) {
                 struct brightSpot *bs = &brightSpots[(head_bs + i) % MAX_NUM_BS];
 
@@ -1183,6 +1194,42 @@ void tube_drawGlowEffect(cairo_t *cr2)
 
                 if (fadeout <= age)
                         break;
+
+                // Determine the bounding box
+                if (bs->x0 < bbx0)
+                        bbx0 = bs->x0;
+                if (bs->y0 < bby0)
+                        bby0 = bs->y0;
+                if (bbx2 < bs->x0)
+                        bbx2 = bs->x0;
+                if (bby2 < bs->y0)
+                        bby2 = bs->y0;
+
+                if (bs->x2 < bbx0)
+                        bbx0 = bs->x2;
+                if (bs->y2 < bby0)
+                        bby0 = bs->y2;
+                if (bbx2 < bs->x2)
+                        bbx2 = bs->x2;
+                if (bby2 < bs->y2)
+                        bby2 = bs->y2;
+
+                n++;
+        }
+
+        // If the bright spots are concentrated in a narrow area, increase glow gain
+        double bb_size = (bbx2 - bbx0) * (bby2 - bby0);
+        double narrow_area_glow_gain;
+        narrow_area_glow_gain = n * 5 / bb_size;
+        if (narrow_area_glow_gain < 1.0)
+                narrow_area_glow_gain = 1.0;
+        if (1.5 < narrow_area_glow_gain)
+                narrow_area_glow_gain = 1.5;
+        if (DEBUG && 1.0 < narrow_area_glow_gain) {
+                printf("%.1f, %.1f - %.1f, %.1f: area size = %.1f, gain = %.1f, n = %d\n",
+                       bbx0, bby0, bbx2, bby2,
+                       (bbx2 - bbx0) * (bby2 - bby0), narrow_area_glow_gain, n);
+        }
 
         double peak_in = n * 1 / 10;
         double peak_out = n * 3 / 10;
@@ -1198,6 +1245,8 @@ void tube_drawGlowEffect(cairo_t *cr2)
                 } else {
                         glow = (double)(n - i) / (n - peak_out);
                 }
+                glow *= narrow_area_glow_gain;
+
                 double scale = glow * GLOW_BLUR;
                 double gain = glow * GLOW_GAIN;
 
