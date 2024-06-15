@@ -93,7 +93,7 @@ static void on_quit_event()
 
 static void do_drawing(cairo_t *cr, GtkWidget *widget)
 {
-        static cairo_surface_t *permanent_surface, *temporary_surface;
+        static cairo_surface_t *permanent_surface, *temporary_surface, *temporary_surface3;
 
         g_source_remove(global_timeout_ref);    // stop timer, in case do_drawing takes too long
 
@@ -117,6 +117,8 @@ static void do_drawing(cairo_t *cr, GtkWidget *widget)
                 permanent_surface = cairo_surface_create_similar(cairo_get_target(cr),
                         CAIRO_CONTENT_COLOR, windowWidth, windowHeight);
                 temporary_surface = cairo_surface_create_similar(cairo_get_target(cr),
+                        CAIRO_CONTENT_COLOR_ALPHA, windowWidth, windowHeight);
+                temporary_surface3 = cairo_surface_create_similar(cairo_get_target(cr),
                         CAIRO_CONTENT_COLOR_ALPHA, windowWidth, windowHeight);
 
                 if (argHideCursor) { // hide cursor (does not allow GIN mode)
@@ -148,6 +150,16 @@ static void do_drawing(cairo_t *cr, GtkWidget *widget)
                 cairo_set_operator(cr, CAIRO_OPERATOR_LIGHTEN);
                 cairo_set_source_surface(cr, temporary_surface, windowWidthOffset, windowHeightOffset);
                 cairo_paint(cr);
+
+                cairo_t *temporary_cr3 = cairo_create(temporary_surface3);
+                if (temporary_cr3 == NULL) {
+                        printf("Cannot create drawing surfaces\n");
+                        exit(1);
+                }
+                tube_drawGlowEffect(temporary_cr3);
+                cairo_set_source_surface(cr, temporary_surface3, windowWidthOffset, windowHeightOffset);
+                cairo_paint(cr);
+                cairo_destroy(temporary_cr3);
                 cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
         }
 
