@@ -38,6 +38,8 @@
 #define BLACK_INTENSITY         0.08            // effect of flood gun
 #define BLACK_SATURATION        0.2
 #define FADE                    0.3             // lower value means slower fading
+#define GHOST_OFFS_X            -8
+#define GHOST_OFFS_Y            -8
 
 #define _GNU_SOURCE
 
@@ -994,6 +996,8 @@ void tube_drawBrightSpot(cairo_t *cr2, struct brightSpot *bs)
 {
         cairo_set_operator(cr2, CAIRO_OPERATOR_LIGHTEN);
         cairo_set_line_cap(cr2, CAIRO_LINE_CAP_ROUND);
+        const double ghost_gain = gain * 0.6;
+        const double ghost_scale = scale * 1.0;
 
         switch (bs->type) {
         case BRIGHT_SPOT_CHARACTER:
@@ -1005,6 +1009,9 @@ void tube_drawBrightSpot(cairo_t *cr2, struct brightSpot *bs)
                         cairo_move_to(cr2, bs->x0 + f->x, bs->y0 + f->y);
                         cairo_show_text(cr2, bs->s);
                 }
+                tube_set_source_rgb(cr2, bs->intensity * ghost_gain, BRIGHT_SPOT_SATURATION);
+                cairo_move_to(cr2, bs->x0 - 8, bs->y0 - 8);
+                cairo_show_text(cr2, bs->s);
                 break;
         case BRIGHT_SPOT_POINT:
                 // speed is a problem here
@@ -1023,6 +1030,10 @@ void tube_drawBrightSpot(cairo_t *cr2, struct brightSpot *bs)
                 }
                 xlast = tube_x2;
                 ylast = tube_y2;
+                tube_set_source_rgb(cr2, bs->intensity * ghost_gain, BRIGHT_SPOT_SATURATION);
+                cairo_arc(cr2, bs->x0 + GHOST_OFFS_X, bs->y0 + GHOST_OFFS_Y,
+                          bs->pensize * ghost_scale, 0, PI2);
+                cairo_fill(cr2);
                 break;
         case BRIGHT_SPOT_VECTOR:
                 for (int i = 0; i < sizeof(glow_segment)/sizeof(*glow_segment); i++) {
@@ -1034,6 +1045,14 @@ void tube_drawBrightSpot(cairo_t *cr2, struct brightSpot *bs)
                         cairo_line_to(cr2, bs->x2 + f->x, bs->y2 + f->y);
                         cairo_stroke(cr2);
                 }
+                tube_set_source_rgb(cr2, bs->intensity * ghost_gain, BRIGHT_SPOT_SATURATION);
+                cairo_set_line_width(cr2, bs->pensize * ghost_scale);
+                cairo_move_to(cr2, bs->x0 + GHOST_OFFS_X, bs->y0 + GHOST_OFFS_Y);
+                cairo_line_to(cr2, bs->x2 + GHOST_OFFS_X, bs->y2 + GHOST_OFFS_Y);
+                cairo_stroke(cr2);
+                cairo_set_line_width (cr2, 0.1);
+                cairo_arc(cr2, bs->x0 - 8, bs->y0 - 8, bs->pensize * ghost_scale, 0, PI2);
+                cairo_fill(cr2);
                 break;
         }
 
