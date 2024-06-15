@@ -45,6 +45,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 #include <termios.h>
 #include <sys/ioctl.h>
@@ -162,6 +163,20 @@ long tube_mSeconds()
         initialized = 1;
         t = t - startTime;
         if (t < 0) t += 86400000;
+        return t;
+}
+
+uint64_t tube_uSeconds()
+// return time in micro sec since start of program
+{
+        static int initialized = 0;
+        static uint64_t startTime;
+        struct timeval tv;
+        gettimeofday(&tv,NULL);
+        uint64_t t = ((uint64_t)1000000 * tv.tv_sec)  + tv.tv_usec;
+        if (!initialized) startTime = t;
+        initialized = 1;
+        t = t - startTime;
         return t;
 }
 
@@ -944,6 +959,7 @@ void tube_set_source_rgb(cairo_t *cr, double intensity, double saturation)
     cairo_set_source_rgb(cr, intensity * saturation, intensity, intensity * saturation);
 }
 
+#define MAX_NUM_BS 1000
 #define MAX_CHARACTER_LENGTH 4
 
 enum {
@@ -962,7 +978,9 @@ struct brightSpot {
         char s[MAX_CHARACTER_LENGTH + 1];
 };
 
-static struct brightSpot brightSpot;
+static struct brightSpot brightSpots[MAX_NUM_BS];
+static int num_bs = 0;
+static int head_bs = 0;
 
 struct filter {
         double x, y, size, intensity;
@@ -1059,10 +1077,24 @@ void tube_drawBrightSpot(cairo_t *cr2, struct brightSpot *bs)
         cairo_set_operator(cr2, CAIRO_OPERATOR_OVER);
 }
 
+struct brightSpot * tube_nextBrightSpot(void)
+{
+        struct brightSpot *bs = &brightSpots[(head_bs + num_bs) % MAX_NUM_BS];
+
+        if (MAX_NUM_BS <= num_bs) {
+                head_bs++;
+        } else {
+                num_bs++;
+        }
+
+        return bs;
+}
+
 void tube_addBrightCharacter(cairo_t *cr2, double intensity, double pensize, double fontsize,
                              double x, double y, const char *utf8)
 {
-        struct brightSpot *bs = &brightSpot;
+        struct brightSpot *bs = tube_nextBrightSpot();
+        bs->time_stamp_usec = tube_uSeconds();
         bs->type = BRIGHT_SPOT_CHARACTER;
         bs->intensity = intensity;
         bs->pensize = pensize;
@@ -1076,7 +1108,8 @@ void tube_addBrightCharacter(cairo_t *cr2, double intensity, double pensize, dou
 
 void tube_addBrightPoint(cairo_t *cr2, double intensity, double pensize, double x, double y)
 {
-        struct brightSpot *bs = &brightSpot;
+        struct brightSpot *bs = tube_nextBrightSpot();
+        bs->time_stamp_usec = tube_uSeconds();
         bs->type = BRIGHT_SPOT_POINT;
         bs->intensity = intensity;
         bs->pensize = pensize;
@@ -1087,7 +1120,8 @@ void tube_addBrightPoint(cairo_t *cr2, double intensity, double pensize, double 
 
 void tube_addBrightVector(cairo_t *cr2, double intensity, double pensize, double x0, double y0, double x2, double y2)
 {
-        struct brightSpot *bs = &brightSpot;
+        struct brightSpot *bs = tube_nextBrightSpot();
+        bs->time_stamp_usec = tube_uSeconds();
         bs->type = BRIGHT_SPOT_VECTOR;
         bs->intensity = intensity;
         bs->pensize = pensize;
