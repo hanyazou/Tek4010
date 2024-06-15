@@ -1,4 +1,4 @@
-LIBS = `pkg-config --libs gtk+-3.0`
+LIBS = `pkg-config --libs gtk+-3.0` -lm
 
 CFLAGS = -std=c99 `pkg-config --cflags gtk+-3.0`
 
