@@ -140,6 +140,12 @@ int getDataPipe[2];
 FILE *putKeys;
 int putKeysPipe[2];
 
+static void tube_addBrightCharacter(cairo_t *cr2, double intensity, double pensize, double fontsize,
+                                    double x, double y, const char *utf8);
+static void tube_addBrightPoint(cairo_t *cr2, double intensity, double pensize,
+                                double x, double y);
+static void tube_addBrightVector(cairo_t *cr2, double intensity, double pensize,
+                                 double x0, double y0, double x2, double y2);
 static void tube_set_source_rgb(cairo_t *cr, double intensity, double saturation);
 
 long tube_mSeconds()
@@ -812,9 +818,8 @@ void tube_drawCharacter(cairo_t *cr, cairo_t *cr2, char ch)
                 cairo_show_text(cr, s);
 
                 // draw the bright spot
-                tube_set_source_rgb(cr2, BRIGHT_SPOT_INTENSITY, BRIGHT_SPOT_SATURATION);
-                cairo_move_to(cr2, tube_x0, windowHeight - tube_y0 + currentCharacterOffset);
-                cairo_show_text(cr2, s);
+                tube_addBrightCharacter(cr2, BRIGHT_SPOT_INTENSITY, pensize, currentFontSize, tube_x0,
+                                        windowHeight - tube_y0 + currentCharacterOffset, s);
         }
 
         tube_x0 += hDotsPerChar;
@@ -843,21 +848,9 @@ void tube_drawPoint(cairo_t *cr, cairo_t *cr2)
         cairo_line_to(cr, tube_x2 + 1, windowHeight - tube_y2 + 1);
         cairo_stroke (cr);
 
-        // speed is a problem here
-        // do not draw adjacent bright spots
-
-        if (((tube_x2 - xlast) > 2) || ((xlast - tube_x2) > 2) ||
-                ((tube_y2 - ylast) > 2) || ((ylast - tube_y2) > 2))  {
-
-                // draw the bright spot
-                cairo_set_line_width (cr2, 0.1);
-                tube_set_source_rgb(cr2, (BRIGHT_SPOT_INTENSITY * intensity) / 100, BRIGHT_SPOT_SATURATION);
-                cairo_arc(cr2, tube_x2, windowHeight - tube_y2, 2 + defocussed, 0, PI2);
-                cairo_fill(cr2);
-
-                xlast = tube_x2;
-                ylast = tube_y2;
-        }
+        // draw the bright spot
+        tube_addBrightPoint(cr2, (BRIGHT_SPOT_INTENSITY * intensity) / 100, pensize + defocussed,
+                            tube_x2, windowHeight - tube_y2);
 
         isBrightSpot = 1;
 }
@@ -904,11 +897,9 @@ void tube_drawVector(cairo_t *cr, cairo_t *cr2)
 
 
                 // draw the bright spot
-                cairo_set_line_width (cr2, (pensize+1) + defocussed);
-                tube_set_source_rgb(cr2, BRIGHT_SPOT_INTENSITY, BRIGHT_SPOT_SATURATION);
-                cairo_move_to(cr2, tube_x0, windowHeight - tube_y0);
-                cairo_line_to(cr2, tube_x2, windowHeight - tube_y2);
-                cairo_stroke(cr2);
+                tube_addBrightVector(cr2, BRIGHT_SPOT_INTENSITY, pensize + defocussed,
+                                     tube_x0, windowHeight - tube_y0,
+                                     tube_x2, windowHeight - tube_y2);
         }
 
         isBrightSpot = 1; // also to be set if writeThroughMode
@@ -949,4 +940,141 @@ void tube_changeCharacterSize(cairo_t *cr, cairo_t *cr2,int charsPerLine, int ch
 void tube_set_source_rgb(cairo_t *cr, double intensity, double saturation)
 {
     cairo_set_source_rgb(cr, intensity * saturation, intensity, intensity * saturation);
+}
+
+#define MAX_CHARACTER_LENGTH 4
+
+enum {
+        BRIGHT_SPOT_CHARACTER,
+        BRIGHT_SPOT_POINT,
+        BRIGHT_SPOT_VECTOR,
+};
+
+struct brightSpot {
+        uint64_t time_stamp_usec;
+        int type;
+        double intensity;
+        double pensize;
+        double fontsize;
+        double x0, y0, x2, y2;
+        char s[MAX_CHARACTER_LENGTH + 1];
+};
+
+static struct brightSpot brightSpot;
+
+struct filter {
+        double x, y, size, intensity;
+};
+
+struct filter glow_text[] = {
+        { +0.0, +0.0, 1.0, 1.00 },
+
+        { -1.0, -1.0, 1.0, 0.66 },
+        { -1.0, +1.0, 1.0, 0.66 },
+        { +1.0, -1.0, 1.0, 0.66 },
+        { +1.0, +1.0, 1.0, 0.66 },
+
+        { -2.0, -1.0, 1.0, 0.33 },
+        { -2.0, +1.0, 1.0, 0.33 },
+        { -1.0, -2.0, 1.0, 0.33 },
+        { -1.0, +2.0, 1.0, 0.33 },
+        { +1.0, -2.0, 1.0, 0.33 },
+        { +1.0, +2.0, 1.0, 0.33 },
+        { +2.0, -1.0, 1.0, 0.33 },
+        { +2.0, +1.0, 1.0, 0.33 },
+};
+
+struct filter glow_segment[] = {
+        { +0.0, +0.0, 1.0, 1.00 },
+        { +0.0, +0.0, 3.0, 0.66 },
+        { +0.0, +0.0, 5.0, 0.33 },
+};
+
+void tube_drawBrightSpot(cairo_t *cr2, struct brightSpot *bs)
+{
+        cairo_set_operator(cr2, CAIRO_OPERATOR_LIGHTEN);
+        cairo_set_line_cap(cr2, CAIRO_LINE_CAP_ROUND);
+
+        switch (bs->type) {
+        case BRIGHT_SPOT_CHARACTER:
+                cairo_set_font_size(cr2, bs->fontsize);
+                for (int i = 0; i < sizeof(glow_text)/sizeof(*glow_text); i++) {
+                        struct filter *f = &glow_text[i];
+                        tube_set_source_rgb(cr2, bs->intensity * f->intensity,
+                                            BRIGHT_SPOT_SATURATION);
+                        cairo_move_to(cr2, bs->x0 + f->x, bs->y0 + f->y);
+                        cairo_show_text(cr2, bs->s);
+                }
+                break;
+        case BRIGHT_SPOT_POINT:
+                // speed is a problem here
+                // do not draw adjacent bright spots
+                if ((2 <= (tube_x2 - xlast)) && (2 <= (xlast - tube_x2)) &&
+                    (2 <= (tube_y2 - ylast)) && (2 <= (ylast - tube_y2)))  {
+                        break;
+                }
+                cairo_set_line_width (cr2, 0.1);
+                for (int i = 0; i < sizeof(glow_segment)/sizeof(*glow_segment); i++) {
+                        struct filter *f = &glow_segment[i];
+                        tube_set_source_rgb(cr2, bs->intensity * f->intensity,
+                                            BRIGHT_SPOT_SATURATION);
+                        cairo_arc(cr2, bs->x0 + f->x, bs->y0 + f->y, bs->pensize + f->size, 0, PI2);
+                        cairo_fill(cr2);
+                }
+                xlast = tube_x2;
+                ylast = tube_y2;
+                break;
+        case BRIGHT_SPOT_VECTOR:
+                for (int i = 0; i < sizeof(glow_segment)/sizeof(*glow_segment); i++) {
+                        struct filter *f = &glow_segment[i];
+                        tube_set_source_rgb(cr2, bs->intensity * f->intensity,
+                                            BRIGHT_SPOT_SATURATION);
+                        cairo_set_line_width(cr2, bs->pensize + f-> size);
+                        cairo_move_to(cr2, bs->x0 + f->x, bs->y0 + f->y);
+                        cairo_line_to(cr2, bs->x2 + f->x, bs->y2 + f->y);
+                        cairo_stroke(cr2);
+                }
+                break;
+        }
+
+        cairo_set_operator(cr2, CAIRO_OPERATOR_OVER);
+}
+
+void tube_addBrightCharacter(cairo_t *cr2, double intensity, double pensize, double fontsize,
+                             double x, double y, const char *utf8)
+{
+        struct brightSpot *bs = &brightSpot;
+        bs->type = BRIGHT_SPOT_CHARACTER;
+        bs->intensity = intensity;
+        bs->pensize = pensize;
+        bs->fontsize = fontsize;
+        bs->x0 = x;
+        bs->y0 = y;
+        strncpy(bs->s, utf8, sizeof(bs->s));
+        bs->s[sizeof(bs->s) - 1] = '\0';
+        tube_drawBrightSpot(cr2, bs);
+}
+
+void tube_addBrightPoint(cairo_t *cr2, double intensity, double pensize, double x, double y)
+{
+        struct brightSpot *bs = &brightSpot;
+        bs->type = BRIGHT_SPOT_POINT;
+        bs->intensity = intensity;
+        bs->pensize = pensize;
+        bs->x0 = x;
+        bs->y0 = y;
+        tube_drawBrightSpot(cr2, bs);
+}
+
+void tube_addBrightVector(cairo_t *cr2, double intensity, double pensize, double x0, double y0, double x2, double y2)
+{
+        struct brightSpot *bs = &brightSpot;
+        bs->type = BRIGHT_SPOT_VECTOR;
+        bs->intensity = intensity;
+        bs->pensize = pensize;
+        bs->x0 = x0;
+        bs->y0 = y0;
+        bs->x2 = x2;
+        bs->y2 = y2;
+        tube_drawBrightSpot(cr2, bs);
 }
