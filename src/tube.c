@@ -63,6 +63,7 @@
 #include <sys/socket.h>
 #endif
 #include <float.h>
+#include <math.h>
 
 #include "main.h"
 #include "tube.h"
@@ -978,6 +979,7 @@ struct brightSpot {
         double pensize;
         double fontsize;
         double x0, y0, x2, y2;
+        double length;
         char s[MAX_CHARACTER_LENGTH + 1];
 };
 
@@ -1129,6 +1131,7 @@ void tube_addBrightCharacter(cairo_t *cr2, double intensity, double pensize, dou
         bs->y0 = y;
         bs->x2 = x + fontsize;
         bs->y2 = y + fontsize;
+        bs->length  = fontsize * 2;
         strncpy(bs->s, utf8, sizeof(bs->s));
         bs->s[sizeof(bs->s) - 1] = '\0';
         if (argFast)
@@ -1146,6 +1149,7 @@ void tube_addBrightPoint(cairo_t *cr2, double intensity, double pensize, double 
         bs->y0 = y;
         bs->x2 = x + pensize * 2;
         bs->y2 = y + pensize * 2;
+        bs->length  = pensize * 2;
         if (argFast) {
                 tube_drawBrightSpot(cr2, bs, 2.0, GLOW_GAIN);
         } else {
@@ -1166,6 +1170,7 @@ void tube_addBrightVector(cairo_t *cr2, double intensity, double pensize, double
         bs->y0 = y0;
         bs->x2 = x2;
         bs->y2 = y2;
+        bs->length  = sqrt((x0 - x2) * (x0 - x2) + (x0 - x2) * (x0 - x2));
         if (argFast)
                 tube_drawBrightSpot(cr2, bs, 2.0, GLOW_GAIN);
 }
@@ -1247,8 +1252,14 @@ void tube_drawGlowEffect(cairo_t *cr2)
                 }
                 glow *= narrow_area_glow_gain;
 
-                double scale = glow * GLOW_BLUR;
-                double gain = glow * GLOW_GAIN;
+                double scale = glow;
+                double gain = glow;
+
+                // long line might be better drawn without glow
+                if (bs->length < 50) {
+                    scale *= GLOW_BLUR;
+                    gain *= GLOW_GAIN;
+                }
 
                 switch (bs->type) {
                 case BRIGHT_SPOT_CHARACTER:
